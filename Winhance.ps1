@@ -8967,42 +8967,58 @@ function Invoke-ScheduledTaskSettings {
     )
 
     foreach ($task in $ScheduledTasksList) {
-        try {
-            # The task path must start with \ and end with \
-            $taskPath = "\{0}\" -f [string]::Join('\', $task.Split('\')[0..($task.Split('\').Length - 2)])
-            $taskName = $task.Split('\')[-1]
-            
-            Write-Log "Attempting to process task: $taskName in path: $taskPath" -Severity 'INFO'
-            
-            $taskObj = Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction Stop
-            
-            if ($null -ne $taskObj) {
-                if ($Action -eq [TaskAction]::Apply) {
-                    Disable-ScheduledTask -InputObject $taskObj -ErrorAction Stop | Out-Null
-                    Write-Log "Disabled task: $task" -Severity 'SUCCESS'
-                }
-                else {
-                    Enable-ScheduledTask -InputObject $taskObj -ErrorAction Stop | Out-Null
-                    Write-Log "Enabled task: $task" -Severity 'SUCCESS'
-                }
-                $successCount++
-            }
-        }
-        catch {
-            if ($_.Exception.Message -like "*Access is denied*") {
-                $protectedTasks += $task
-                Write-Log "Protected task (access denied): $task" -Severity 'WARNING'
-            }
-            elseif ($_.Exception.Message -like "*No matching MSFT_ScheduledTask*") {
-                $nonExistentTasks += $task
-                Write-Log "Task not found on system: $task" -Severity 'INFO'
-            }
-            else {
-                Write-Log "Failed to process task: $task - $($_.Exception.Message)" -Severity 'ERROR'
-            }
+           try {
+        # Split the task path and check if it has enough parts to avoid index out of range
+        $splitTask = $task.Split('\')
+        
+        # Ensure there's enough parts in the split path to form a valid task path
+        if ($splitTask.Length -gt 1) {
+            $taskPath = "\{0}\" -f [string]::Join('\', $splitTask[0..($splitTask.Length - 2)])
+        } else {
+            Write-Log "Invalid task path: $task" -Severity 'ERROR'
             continue
         }
+
+        # Get the task name (the last element after splitting by backslash)
+        $taskName = $splitTask[-1]
+        
+        Write-Log "Attempting to process task: $taskName in path: $taskPath" -Severity 'INFO'
+        
+        # Try to retrieve the scheduled task
+        $taskObj = Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction Stop
+        
+        if ($null -ne $taskObj) {
+            if ($Action -eq [TaskAction]::Apply) {
+                # Disable the task if action is Apply
+                Disable-ScheduledTask -InputObject $taskObj -ErrorAction Stop | Out-Null
+                Write-Log "Disabled task: $task" -Severity 'SUCCESS'
+            }
+            else {
+                # Enable the task if action is not Apply
+                Enable-ScheduledTask -InputObject $taskObj -ErrorAction Stop | Out-Null
+                Write-Log "Enabled task: $task" -Severity 'SUCCESS'
+            }
+            $successCount++
+        }
     }
+    catch {
+        if ($_.Exception.Message -like "*Access is denied*") {
+            # Task is protected, add it to the protected list
+            $protectedTasks += $task
+            Write-Log "Protected task (access denied): $task" -Severity 'WARNING'
+        }
+        elseif ($_.Exception.Message -like "*No matching MSFT_ScheduledTask*") {
+            # Task doesn't exist on the system
+            $nonExistentTasks += $task
+            Write-Log "Task not found on system: $task" -Severity 'INFO'
+        }
+        else {
+            # Log any other errors
+            Write-Log "Failed to process task: $task - $($_.Exception.Message)" -Severity 'ERROR'
+        }
+        continue
+    }
+}
 
     # Show completion message if not suppressed
     if (-not $SuppressMessage) {

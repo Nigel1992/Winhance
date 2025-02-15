@@ -11609,15 +11609,39 @@ $CustomizeDefaultsButton.Add_Click({
 # ==========================
 
 $CreateShortcutButton.Add_Click({
+    try {
+        $DesktopPath = [System.IO.Path]::Combine($env:USERPROFILE, "Desktop")
+
+        # Check if OneDrive is being used and adjust path if necessary
+        if (Test-Path "$env:OneDrive\Desktop") {
+            $DesktopPath = [System.IO.Path]::Combine($env:OneDrive, "Desktop")
+            Write-Host "Using OneDrive Desktop"
+        } else {
+            Write-Host "Using Regular Desktop"
+        }
+
+        # Ensure the Desktop path exists
+        if (-not (Test-Path $DesktopPath)) {
+            Write-Host "Error: Desktop path does not exist" -ForegroundColor Red
+            [System.Windows.MessageBox]::Show("Desktop path does not exist. Please check your OneDrive or Desktop settings.", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+            return
+        }
+
+        # Create the shortcut
         $WshShell = New-Object -ComObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\Winhance.lnk")
+        $Shortcut = $WshShell.CreateShortcut("$DesktopPath\Winhance.lnk")
         $Shortcut.TargetPath = "powershell.exe"
-        $Shortcut.Arguments = "-ExecutionPolicy Bypass -Command `"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command `"`"irm \`"https://github.com/memstechtips/Winhance/raw/main/Winhance.ps1\`" | iex`"`"' -Verb RunAs`""
+        $Shortcut.Arguments = "-ExecutionPolicy Bypass -Command `"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command `"`"irm \`"https://github.com/memstechtips/Winhance/raw/main/Winhance.ps1\`" | iex`"`"' -Verb RunAs`"" 
         $Shortcut.IconLocation = "powershell.exe,0"
         $Shortcut.Save()
-    
+
         [System.Windows.MessageBox]::Show("Desktop shortcut created successfully!", "Success", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
-    })
+    } catch {
+        Write-Host "Error: $_" -ForegroundColor Red
+        [System.Windows.MessageBox]::Show("An error occurred while creating the shortcut: $_", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+    }
+})
+
 
 $GitHubButton.Add_Click({
         Start-Process "https://github.com/memstechtips"

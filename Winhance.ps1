@@ -3129,14 +3129,14 @@ function Switch-Screen {
         # Set button highlight
         Set-NavigationButtonSelected -SelectedButton $SelectedButton
 
-        # Hide all screens
+        # Hide all screens using proper enum
         foreach ($screen in $script:screens.Values) {
-            $screen.Visibility = 'Collapsed'
+            $screen.Visibility = [System.Windows.Visibility]::Collapsed
         }
 
-        # Show target screen
+        # Show target screen using proper enum
         if ($script:screens.ContainsKey($TargetScreenName)) {
-            $script:screens[$TargetScreenName].Visibility = 'Visible'
+            $script:screens[$TargetScreenName].Visibility = [System.Windows.Visibility]::Visible
             # Update current screen tracker
             $script:CurrentScreen = $TargetScreenName
         }
@@ -3152,33 +3152,57 @@ function Switch-Screen {
     }
 }
 
+
 # Function to initialize screens
 function Initialize-Screens {
-    # Initialize screen dictionary
-    $script:screens = @{
-        'SoftAppsScreen'  = $window.FindName("SoftAppsScreen")
-        'OptimizeScreen'  = $window.FindName("OptimizeScreen")
-        'CustomizeScreen' = $window.FindName("CustomizeScreen")
-        'AboutScreen'     = $window.FindName("AboutScreen")
+    try {
+        # Initialize screen dictionary with explicit visibility setting
+        $script:screens = @{
+            'SoftAppsScreen'  = $window.FindName("SoftAppsScreen")
+            'OptimizeScreen'  = $window.FindName("OptimizeScreen")
+            'CustomizeScreen' = $window.FindName("CustomizeScreen")
+            'AboutScreen'     = $window.FindName("AboutScreen")
+        }
+
+        # Verify all screens were found
+        foreach ($screenName in $script:screens.Keys) {
+            if ($null -eq $script:screens[$screenName]) {
+                throw "Could not find screen: $screenName"
+            }
+        }
+
+        # Initialize status text controls
+        $script:softAppsStatusText = $window.FindName("SoftAppsStatusText")
+        $script:optimizeStatusText = $window.FindName("OptimizeStatusText")
+        $script:customizeStatusText = $window.FindName("CustomizeStatusText")
+        $script:aboutStatusText = $window.FindName("AboutStatusText")
+
+        # Set initial screen
+        $script:CurrentScreen = 'SoftAppsScreen'
+
+        # Set initial visibility states using proper enum
+        foreach ($screenName in $script:screens.Keys) {
+            $script:screens[$screenName].Visibility = if ($screenName -eq 'SoftAppsScreen') { 
+                [System.Windows.Visibility]::Visible 
+            } else { 
+                [System.Windows.Visibility]::Collapsed 
+            }
+        }
+
+        # Set initial navigation button state
+        if ($null -ne $SoftwareAppsNavButton) {
+            Set-NavigationButtonSelected -SelectedButton $SoftwareAppsNavButton
+        }
+
+        return $true
     }
-
-    # Initialize status text controls
-    $script:softAppsStatusText = $window.FindName("SoftAppsStatusText")
-    $script:optimizeStatusText = $window.FindName("OptimizeStatusText")
-    $script:customizeStatusText = $window.FindName("CustomizeStatusText")
-    $script:aboutStatusText = $window.FindName("AboutStatusText")
-
-    # Set initial screen
-    $script:CurrentScreen = 'SoftAppsScreen'
-
-    # Set initial visibility states
-    foreach ($screenName in $script:screens.Keys) {
-        $script:screens[$screenName].Visibility = if ($screenName -eq 'SoftAppsScreen') { 'Visible' } else { 'Collapsed' }
+    catch {
+        Write-Log "Error initializing screens: $_" -Severity 'ERROR'
+        Show-MessageBox -Message "Failed to initialize screens: $($_.Exception.Message)" -Title "Initialization Error" -Icon Error
+        return $false
     }
-
-    # Set initial navigation button state
-    Set-NavigationButtonSelected -SelectedButton $SoftwareAppsNavButton
 }
+
 
 # ==================================
 # General Helper Functions

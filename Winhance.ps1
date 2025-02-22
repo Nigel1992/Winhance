@@ -4781,27 +4781,26 @@ function Initialize-PackageCheckboxes {
 
 # Function to initialize package status cache
 function Initialize-PackageStatusCache {
-    Write-Log "[INFO] Initializing package status cache"
-    
     try {
-        # Cache all installed capabilities
-        Write-Log "[INFO] Caching installed capabilities"
-        $script:InstalledCapabilities = @(Get-WindowsCapability -Online | 
-            Where-Object State -eq "Installed" | 
-            Select-Object -ExpandProperty Name)
-        Write-Log "[INFO] Cached $($script:InstalledCapabilities.Count) capabilities"
+        Write-Log -Message "Initializing package status cache" -Severity 'INFO'
+        $script:packageStatusCache = @{}
+
+        # Focus on AppX packages which are more reliable across PS versions
+        $installedApps = Get-AppxPackage -AllUsers | Select-Object Name
         
-        # Cache all installed packages
-        Write-Log "[INFO] Caching installed packages"
-        $script:InstalledPackages = @(Get-AppxPackage -AllUsers | 
-            Select-Object -ExpandProperty Name)
-        Write-Log "[INFO] Cached $($script:InstalledPackages.Count) packages"
-        
-        Write-Log "[INFO] Package status cache initialized successfully"
+        Write-Log -Message "Caching installed capabilities" -Severity 'INFO'
+        foreach ($app in $installedApps) {
+            if ($app.Name) {
+                $script:packageStatusCache[$app.Name] = $true
+            }
+        }
+
+        Write-Log -Message "Package status cache initialized successfully" -Severity 'INFO'
+        return $true
     }
     catch {
-        Write-Log "[ERROR] Failed to initialize package status cache: $_"
-        throw
+        Write-Log -Message "Failed to initialize package status cache: $($_.Exception.Message)" -Severity 'ERROR'
+        return $false
     }
 }
 
@@ -9478,3 +9477,5 @@ $($_.Exception.Message)" `
 finally {
     Stop-Log
 }
+
+

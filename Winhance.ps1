@@ -2069,6 +2069,14 @@ $SCRIPT:RegConfig = @{
         },
         [pscustomobject]@{
             BaseKey      = [BaseKey]::Explorer
+            SubKeySuffix = "SmartActionPlatform\SmartClipboard"
+            Name         = "Disabled"
+            Recommended  = [ValuePair]::new(1, [RegistryValueKind]::DWord)
+            DefaultValue = $null
+            Description  = "Disables suggested actions"
+        },
+        [pscustomobject]@{
+            BaseKey      = [BaseKey]::Explorer
             SubKeySuffix = "Windows"
             Name         = "LegacyDefaultPrinterMode"
             Recommended  = [ValuePair]::new(1, [RegistryValueKind]::DWord)
@@ -2658,7 +2666,7 @@ function RunAsTI($cmd, $arg) {
     0..5|% {$D += $DM."Defin`eType"("AveYo_$_",1179913,[ValueType])}; $D += [uintptr]; 4..6|% {$D += $D[$_]."MakeByR`efType"()}
     $F='kernel','advapi','advapi', ($S,$S,$I,$I,$I,$I,$I,$S,$D[7],$D[8]), ([uintptr],$S,$I,$I,$D[9]),([uintptr],$S,$I,$I,[byte[]],$I)
     0..2|% {$9=$D[0]."DefinePInvok`eMethod"(('CreateProcess','RegOpenKeyEx','RegSetValueEx')[$_],$F[$_]+'32',8214,1,$S,$F[$_+3],1,4)}
-    $DF=($P,$I,$P),($I,$I,$I,$I,$P,$D[1]),($P,$P,$I,$I,$I,$I,$I,$I,$I,$I,$I,$I,[int16],[int16],$P,$P,$P,$P),($D[3],$P),($P,$P,$I,$I)
+    $DF=($P,$I,$P),($I,$I,$I,$I,$P,$D[1]),($I,$S,$S,$S,$I,$I,$I,$I,$I,$I,$I,$I,[int16],[int16],$P,$P,$P,$P),($D[3],$P),($P,$P,$I,$I)
     1..5|% {$k=$_; $n=1; $DF[$_-1]|% {$9=$D[$k]."Defin`eField"('f' + $n++, $_, 6)}}; 0..5|% {$T += $D[$_]."Creat`eType"()}
     0..5|% {nv "A$_" ([Activator]::CreateInstance($T[$_])) -fo}; function F ($1,$2) {$T[0]."G`etMethod"($1).invoke(0,$2)}
     $TI=(whoami /groups)-like'*1-16-16384*'; $As=0; if(!$cmd) {$cmd='control';$arg='admintools'}; if ($cmd-eq'This PC'){$cmd='file:'}
@@ -3485,79 +3493,49 @@ $AppInstallConfigs = @{
 
 # Generic installation handler function
 function Initialize-InstallationHandlers {
-    try {
-        Write-Log "Initializing installation handlers" -Severity 'INFO'
+    foreach ($button in $AppInstallConfigs.Keys) {
+        $config = $AppInstallConfigs[$button]
+        $buttonVar = Get-Variable -Name $button
         
-        # Define installation button handlers
-        $installButtons = @{
-            'InstallStore' = @{
-                'Button' = $installStore
-                'Action' = { Install-MicrosoftStore }
+        $scriptBlock = {
+            [System.Windows.Input.Mouse]::OverrideCursor = [System.Windows.Input.Cursors]::Wait
+            try {
+                $config = $AppInstallConfigs[$this.Name]
+                
+                Write-Status "Preparing to install $($config.FriendlyName). Please wait..."
+                Update-WPFControls
+                
+                if ($config.CustomInstall) {
+                    Write-Status "Installing $($config.FriendlyName). This might take a while..."
+                    Update-WPFControls
+                    $scriptBlock = [ScriptBlock]::Create($config.Function)
+                    & $scriptBlock
+                }
+                else {
+                    Write-Status "Starting installation of $($config.FriendlyName). This process might take several minutes..."
+                    Update-WPFControls
+                    
+                    Install-AppWithWinGet -AppName $config.AppName -FriendlyName $config.FriendlyName
+                }
+                Update-WPFControls
             }
-            'InstallUniGetUI' = @{
-                'Button' = $installUniGetUI
-                'Action' = { Install-UniGetUI }
+            catch {
+                Write-Log "Error installing $($config.FriendlyName): $($_.Exception.Message)" -Severity 'ERROR'
+                Write-Status "Error installing $($config.FriendlyName). Please try again or check the logs."
+                Update-WPFControls
+                Show-MessageBox -Message "Failed to install $($config.FriendlyName)`n`n$($_.Exception.Message)" -Title "Installation Error" -Icon Error
             }
-            'InstallThorium' = @{
-                'Button' = $installThorium
-                'Action' = { Install-ThoriumBrowser }
-            }
-            'InstallFirefox' = @{
-                'Button' = $installFirefox
-                'Action' = { Install-Firefox }
-            }
-            'InstallChrome' = @{
-                'Button' = $installChrome
-                'Action' = { Install-Chrome }
-            }
-            'InstallBrave' = @{
-                'Button' = $installBrave
-                'Action' = { Install-Brave }
-            }
-            'InstallEdge' = @{
-                'Button' = $installEdge
-                'Action' = { Install-Edge }
-            }
-            'InstallEdgeWebView' = @{
-                'Button' = $installEdgeWebView
-                'Action' = { Install-EdgeWebView }
-            }
-            'InstallOneDrive' = @{
-                'Button' = $installOneDrive
-                'Action' = { Install-OneDrive }
-            }
-            'InstallXbox' = @{
-                'Button' = $installXbox
-                'Action' = { Install-XboxApp }
+            finally {
+                [System.Windows.Input.Mouse]::OverrideCursor = $null
             }
         }
-
-        # Add click handlers to each button
-        foreach ($buttonInfo in $installButtons.Values) {
-            if ($null -ne $buttonInfo.Button) {
-                $buttonInfo.Button.Add_Click({
-                    param($sender)
-                    try {
-                        [System.Windows.Input.Mouse]::OverrideCursor = [System.Windows.Input.Cursors]::Wait
-                        $buttonName = $sender.Name
-                        $action = $installButtons[$buttonName].Action
-                        & $action
-                    }
-                    finally {
-                        [System.Windows.Input.Mouse]::OverrideCursor = $null
-                    }
-                })
-            }
-            else {
-                Write-Log "Button not found in XAML" -Severity 'WARNING'
-            }
-        }
-    }
-    catch {
-        Write-Log "Error initializing installation handlers: $_" -Severity 'ERROR'
-        throw
+        
+        # Set the button name property for reference in the script block
+        $buttonVar.Value.Name = $button
+        $buttonVar.Value.Add_Click($scriptBlock)
     }
 }
+
 
 # Function to install Microsoft Store and Remove Winhance Removal script and scheduled task
 function Install-Store {
@@ -4781,26 +4759,27 @@ function Initialize-PackageCheckboxes {
 
 # Function to initialize package status cache
 function Initialize-PackageStatusCache {
+    Write-Log "[INFO] Initializing package status cache"
+    
     try {
-        Write-Log -Message "Initializing package status cache" -Severity 'INFO'
-        $script:packageStatusCache = @{}
-
-        # Focus on AppX packages which are more reliable across PS versions
-        $installedApps = Get-AppxPackage -AllUsers | Select-Object Name
+        # Cache all installed capabilities
+        Write-Log "[INFO] Caching installed capabilities"
+        $script:InstalledCapabilities = @(Get-WindowsCapability -Online | 
+            Where-Object State -eq "Installed" | 
+            Select-Object -ExpandProperty Name)
+        Write-Log "[INFO] Cached $($script:InstalledCapabilities.Count) capabilities"
         
-        Write-Log -Message "Caching installed capabilities" -Severity 'INFO'
-        foreach ($app in $installedApps) {
-            if ($app.Name) {
-                $script:packageStatusCache[$app.Name] = $true
-            }
-        }
-
-        Write-Log -Message "Package status cache initialized successfully" -Severity 'INFO'
-        return $true
+        # Cache all installed packages
+        Write-Log "[INFO] Caching installed packages"
+        $script:InstalledPackages = @(Get-AppxPackage -AllUsers | 
+            Select-Object -ExpandProperty Name)
+        Write-Log "[INFO] Cached $($script:InstalledPackages.Count) packages"
+        
+        Write-Log "[INFO] Package status cache initialized successfully"
     }
     catch {
-        Write-Log -Message "Failed to initialize package status cache: $($_.Exception.Message)" -Severity 'ERROR'
-        return $false
+        Write-Log "[ERROR] Failed to initialize package status cache: $_"
+        throw
     }
 }
 
@@ -5755,6 +5734,162 @@ function Remove-OneDrive {
 
 # Function to remove the selected apps (Including Edge and OneDrive), create removal script and scheduled task
 function Remove-SelectedBloatware {
+    # Keep these helper functions from your original implementation
+    function Process-AppRemoval {
+        param (
+            [string]$AppName,
+            [System.Collections.ArrayList]$bloatScriptContent
+        )
+    
+        Write-Status "Removing app: $AppName" -TargetScreen SoftAppsScreen
+        
+        # Check if this is a package group (like Xbox) that has subpackages
+        $appConfig = $WindowsPackages[$AppName]
+        $packagesToRemove = @()
+        
+        if ($appConfig.SubPackages) {
+            Write-Status "Processing package group: $($appConfig.FriendlyName)" -TargetScreen SoftAppsScreen
+            $packagesToRemove = $appConfig.SubPackages
+            
+            # Add subpackage removal to script
+            $bloatScriptContent.Add("# Remove $($appConfig.FriendlyName) package group") | Out-Null
+            foreach ($subPackage in $appConfig.SubPackages) {
+                $bloatScriptContent.Add("Get-AppxPackage -AllUsers | Where-Object { `$_.Name -eq '$subPackage' } | ForEach-Object { Remove-AppxPackage -Package `$_.PackageFullName -AllUsers -ErrorAction SilentlyContinue }") | Out-Null
+            }
+        }
+        else {
+            $packagesToRemove = @($AppName)
+            # Add to the standalone script (without Write-Status commands)
+            $bloatScriptContent.Add("Get-AppxPackage -AllUsers | Where-Object { `$_.Name -eq '$AppName' } | ForEach-Object { Remove-AppxPackage -Package `$_.PackageFullName -AllUsers -ErrorAction SilentlyContinue }") | Out-Null
+        }
+        
+        # Process each package
+        foreach ($packageName in $packagesToRemove) {
+            $packages = Get-AppxPackage -AllUsers | Where-Object { $_.Name -eq $packageName }
+            
+            if (-not $packages) {
+                Write-Status "No packages found for $packageName" -TargetScreen SoftAppsScreen
+                continue
+            }
+        
+            # Log all found packages before removal
+            foreach ($pkg in $packages) {
+                Write-Status "Found package: $($pkg.PackageFullName) (Architecture: $($pkg.Architecture), Version: $($pkg.Version))" -TargetScreen SoftAppsScreen
+            }
+            
+            foreach ($package in $packages) {
+                Write-Status "Removing package: $($package.PackageFullName)" -TargetScreen SoftAppsScreen
+                try {
+                    # First try to remove provisioned package if it exists
+                    $provPackage = Get-AppxProvisionedPackage -Online | 
+                    Where-Object { $_.DisplayName -eq $packageName }
+                    if ($provPackage) {
+                        Write-Status "Removing provisioned package first: $($provPackage.PackageName)" -TargetScreen SoftAppsScreen
+                        Remove-AppxProvisionedPackage -Online -PackageName $provPackage.PackageName -ErrorAction SilentlyContinue | Out-Null
+                    }
+        
+                    # Create a separate PowerShell process for package removal
+                    $script = {
+                        param($packageFullName)
+                        try {
+                            Remove-AppxPackage -Package $packageFullName -AllUsers -ErrorAction Stop
+                            return @{
+                                Success = $true
+                                Message = "Successfully removed package"
+                            }
+                        }
+                        catch {
+                            return @{
+                                Success = $false
+                                Message = $_.Exception.Message
+                            }
+                        }
+                    }
+                    
+                    $job = Start-Job -ScriptBlock $script -ArgumentList $package.PackageFullName
+                    $completed = Wait-Job -Job $job -Timeout 30
+                    
+                    if ($completed) {
+                        $result = Receive-Job -Job $job
+                        if ($result.Success) {
+                            Write-Status "Successfully removed $($package.PackageFullName)" -TargetScreen SoftAppsScreen
+                        }
+                        else {
+                            Write-Status "Error removing $($package.PackageFullName): $($result.Message)" -TargetScreen SoftAppsScreen
+                        }
+                    }
+                    else {
+                        Write-Status "Package removal timed out: $($package.PackageFullName)" -TargetScreen SoftAppsScreen
+                    }
+                    Remove-Job -Job $job -Force
+                }
+                catch {
+                    Write-Status "Error processing package $($package.PackageFullName): $($_.Exception.Message)" -TargetScreen SoftAppsScreen
+                }
+            }
+        }
+    }
+    
+    function Process-RegistrySettings {
+        param (
+            [string]$AppName,
+            [System.Collections.ArrayList]$bloatScriptContent
+        )
+    
+        # Look up app configuration in WindowsPackages
+        $appConfig = $WindowsPackages[$AppName]
+    
+        if ($appConfig -and $appConfig.RegistrySettings) {
+            Write-Status "Processing registry settings for $($appConfig.FriendlyName)"
+    
+            foreach ($regSetting in $appConfig.RegistrySettings) {
+                $baseKeyInfo = $SCRIPT:BaseKeys[$regSetting.BaseKey]
+                $subKey = $baseKeyInfo.SubKey
+                
+                if ($regSetting.SubKeySuffix) {
+                    $subKey = Join-Path $subKey $regSetting.SubKeySuffix
+                }
+    
+                try {
+                    # For registry keys that need to be deleted
+                    if ($null -eq $regSetting.Name) {
+                        if (Test-Path $subKey) {
+                            Remove-Item -Path $subKey -Force -ErrorAction Stop
+                            Write-Status "Removed registry key: $subKey"
+                            $bloatScriptContent.Add("if (Test-Path '$subKey') { Remove-Item -Path '$subKey' -Force -ErrorAction SilentlyContinue }") | Out-Null
+                        }
+                    }
+                    else {
+                        # For registry values that need to be set
+                        if (-not (Test-Path $subKey)) {
+                            New-Item -Path $subKey -Force | Out-Null
+                        }
+            
+                        $setting = [RegistrySetting]::new(
+                            $baseKeyInfo.Hive,
+                            $subKey,
+                            $regSetting.Name,
+                            $regSetting.Recommended.Value,
+                            $regSetting.Recommended.Type,
+                            $regSetting.DefaultValue,
+                            $regSetting.Description
+                        )
+                        $setting.Execute([RegistryAction]::Apply)
+                        Write-Status "Applied registry setting: $($regSetting.Description)"
+            
+                        # Changed how we generate the registry commands
+                        $bloatScriptContent.Add("if (-not (Test-Path '$subKey')) { New-Item -Path '$subKey' -Force | Out-Null }") | Out-Null
+                        $value = if ($regSetting.Recommended.Type -eq 'DWord') { "[int]$($regSetting.Recommended.Value)" } else { "'$($regSetting.Recommended.Value)'" }
+                        $bloatScriptContent.Add("`$null = New-ItemProperty -Path '$subKey' -Name '$($regSetting.Name)' -Value $value -PropertyType $($regSetting.Recommended.Type) -Force -ErrorAction SilentlyContinue") | Out-Null
+                    }
+                }
+                catch {
+                    Write-Status "Failed to apply registry setting: $($regSetting.Description) - $_"
+                }
+            }
+        }
+    }
+
     # Initialize flags to track what types of items are selected
     $hasApps = $false
     $hasEdge = $false
@@ -8399,11 +8534,201 @@ Margin="27,0,0,0"/>
 <LineBreak />- Display Always On, Brightness at 100%
 <LineBreak />- Battery Saver Disabled
 <LineBreak />- Critical Battery Actions Disabled
+                                                </TextBlock>
+                                            </ToolTip>
+                                        </TextBlock.ToolTip>
+                    </TextBlock>
+                                    <CheckBox x:Name="PowerSettingsCheckBox"
+                             Content="Power Settings"
+                             Style="{DynamicResource CustomCheckBoxStyle}"
+                             FontSize="14"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
+
+            <!-- Customize Screen -->
+            <StackPanel x:Name="CustomizeScreen" Width="943" Height="550" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="93,56,0,0" >
+                <!-- Header -->
+                <DockPanel HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <TextBlock Width="80" Height="70" Margin="0,0,0,0" DockPanel.Dock="Left" FontFamily="Segoe UI Emoji" FontSize="60" Foreground="{DynamicResource PrimaryTextColor}" Text="&#x1F3A8;"  LineHeight="70" LineStackingStrategy="BlockLineHeight" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Height="35" VerticalAlignment="Top" FontFamily="Helvetica Neue" FontSize="32" FontWeight="Bold" Foreground="{DynamicResource PrimaryTextColor}" Text="Customize" />
+                        <DockPanel LastChildFill="False" Width="861">
+                            <TextBlock x:Name="CustomizeStatusText" Height="22" DockPanel.Dock="Left" VerticalAlignment="Bottom" FontFamily="Helvetica Neue" FontSize="14" Foreground="DarkGray" Text="Customize your system's appearance and behavior" />
+                            <Button x:Name="CustomizeDefaultsButton" DockPanel.Dock="Right" Style="{DynamicResource PrimaryButtonStyle}" Content="Defaults" Width="80" Height="30" Margin="0,0,5,0"/>
+                            <Button x:Name="CustomizeApplyButton" DockPanel.Dock="Right" Style="{DynamicResource PrimaryButtonStyle}" Content="Apply" Width="80" Height="30" Margin="0,0,10,0"/>
+                        </DockPanel>
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Main Content -->
+                <Border x:Name="CustomizeMainContentBorder" Margin="0,5,0,0" Background="{DynamicResource MainContainerBorderBrush}" CornerRadius="10" Height="470" >
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="10">
+                            <!-- Theme Settings -->
+                            <Border Background="{DynamicResource ContentSectionBorderBrush}" CornerRadius="5" Margin="5,5,5,5" Effect="{StaticResource LightShadowEffect}">
+                                <StackPanel Margin="10">
+                                    <!-- Dark Mode -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock 
+            Text="&#xE793;"
+            FontFamily="Segoe MDL2 Assets"
+            VerticalAlignment="Center" 
+            Foreground="{DynamicResource PrimaryTextColor}" 
+            FontSize="20"
+            Margin="25,0,0,0" />
+                                            <TextBlock 
+            Text="Dark Mode" 
+            VerticalAlignment="Center" 
+            Foreground="{DynamicResource PrimaryTextColor}" 
+            FontSize="14" 
+            Margin="8,0,0,0" />
+                                        </StackPanel>
+                                        <Slider x:Name="DarkModeSlider" 
+                   Style="{DynamicResource ToggleSliderStyle}" 
+                   Grid.Column="1"
+                   HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Select All Checkbox -->
+                            <Border Background="{DynamicResource ContentSectionBorderBrush}" CornerRadius="5" Margin="5,5,5,5" Effect="{StaticResource LightShadowEffect}">
+                                <StackPanel Orientation="Horizontal" Margin="10">
+                                    <CheckBox x:Name="CustomizeSelectAllCheckbox"
+                 Content="Select All"
+                 Style="{DynamicResource CustomCheckBoxStyle}"
+                 FontSize="14"
+                 Margin="27,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <!-- Taskbar Section -->
+                            <Border Background="{DynamicResource ContentSectionBorderBrush}" CornerRadius="5" Margin="5,5,5,5" Effect="{StaticResource LightShadowEffect}">
+                                <StackPanel Orientation="Horizontal" Margin="10">
+                                    <TextBlock Style="{DynamicResource HelpIconStyle}" Margin="0,0,10,0">
+                                        <TextBlock.ToolTip>
+                                            <ToolTip Style="{DynamicResource CustomTooltipStyle}">
+                                                <TextBlock>
+- Hides Windows Chat icon
+<LineBreak />- Disables News and Interests feed
+<LineBreak />- Hides Meet Now button
+<LineBreak />- Hides Task View button
+<LineBreak />- Disables system tray auto-hide
+<LineBreak />- Clears frequently used programs list
+<LineBreak />- Hides Copilot button
+<LineBreak />- Left-aligns taskbar icons
+                                                </TextBlock>
+                                            </ToolTip>
+                                        </TextBlock.ToolTip>
+                        </TextBlock>
+                                    <CheckBox x:Name="TaskbarCheckBox"
+                                 Content="Taskbar"
+                                 Style="{DynamicResource CustomCheckBoxStyle}"
+                                 FontSize="14"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Start Menu Section -->
+                            <Border Background="{DynamicResource ContentSectionBorderBrush}" CornerRadius="5" Margin="5,5,5,5" Effect="{StaticResource LightShadowEffect}">
+                                <StackPanel Orientation="Horizontal" Margin="10">
+                                    <TextBlock Style="{DynamicResource HelpIconStyle}" Margin="0,0,10,0">
+                                        <TextBlock.ToolTip>
+                                            <ToolTip Style="{DynamicResource CustomTooltipStyle}">
+                                                <TextBlock>
+                                        - Removes all pinned apps
+<LineBreak />- Sets "More Pins" layout (less recommended)
+                                                </TextBlock>
+                                            </ToolTip>
+                                        </TextBlock.ToolTip>
+                        </TextBlock>
+                                    <CheckBox x:Name="StartMenuCheckBox"
+                                 Content="Start Menu"
+                                 Style="{DynamicResource CustomCheckBoxStyle}"
+                                 FontSize="14"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Explorer Section -->
+                            <Border Background="{DynamicResource ContentSectionBorderBrush}" CornerRadius="5" Margin="5,5,5,5" Effect="{StaticResource LightShadowEffect}">
+                                <StackPanel Orientation="Horizontal" Margin="10">
+                                    <TextBlock Style="{DynamicResource HelpIconStyle}" Margin="0,0,10,0">
+                                        <TextBlock.ToolTip>
+                                            <ToolTip Style="{DynamicResource CustomTooltipStyle}">
+                                                <TextBlock>
+                                        - Enables long file paths (32,767 chars)
+<LineBreak />- Disables Windows Spotlight wallpaper feature
+<LineBreak />- Blocks "Allow my organization to manage my device" pop-up
+<LineBreak />- Removes 3D Objects and Home Folder
+<LineBreak />- Opens File Explorer to "This PC"
+<LineBreak />- Shows file name extensions
+<LineBreak />- Disables folder tips and pop-up descriptions
+<LineBreak />- Disables preview handlers and status bar
+<LineBreak />- Disables sync provider notifications
+<LineBreak />- Disables sharing wizard
+<LineBreak />- Disables taskbar animations
+<LineBreak />- Shows thumbnails instead of icons
+<LineBreak />- Disables translucent selection rectangle
+<LineBreak />- Disables shadows for icon labels
+<LineBreak />- Disables account-related notifications
+<LineBreak />- Disables recently opened items in Start and File Explorer
+<LineBreak />- Disables recommendations for tips and shortcuts
+<LineBreak />- Disables snap assist and window animations
+<LineBreak />- Sets Alt+Tab to show open windows only
+<LineBreak />- Hides frequent folders in Quick Access
+<LineBreak />- Disables files from Office.com in Quick Access
+<LineBreak />- Enables full path in title bar
+<LineBreak />- Disables enhance pointer precision (mouse fix)
+<LineBreak />- Sets appearance options to custom
+<LineBreak />- Disables animations and visual effects
+<LineBreak />- Enables smooth edges of screen fonts
+<LineBreak />- Disables menu show delay
+<LineBreak />- Disables auto-capitalization and key sounds
+<LineBreak />- Removes gallery from navigation pane
+<LineBreak />- Restores classic context menu
+<LineBreak />- Disables Tablet Mode &amp; always use Desktop Mode
+<LineBreak />- Disables voice typing microphone button
+<LineBreak />- Disables typing insights
+<LineBreak />- Disables Clipboard suggested actions
+<LineBreak />- Disables Windows managing default printer
+                                                </TextBlock>
+                                            </ToolTip>
+                                        </TextBlock.ToolTip>
+                        </TextBlock>
+                                    <CheckBox x:Name="ExplorerCheckBox"
+                                 Content="Explorer"
+                                 Style="{DynamicResource CustomCheckBoxStyle}"
+                                 FontSize="14"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Notifications Section -->
+                            <Border Background="{DynamicResource ContentSectionBorderBrush}" CornerRadius="5" Margin="5,5,5,5" Effect="{StaticResource LightShadowEffect}">
+                                <StackPanel Orientation="Horizontal" Margin="10">
+                                    <TextBlock Style="{DynamicResource HelpIconStyle}" Margin="0,0,10,0">
+                                        <TextBlock.ToolTip>
+                                            <ToolTip Style="{DynamicResource CustomTooltipStyle}">
+                                                <TextBlock>
+                                        Disables:
+<LineBreak />- Notifications (Incl. Lock Screen)
+<LineBreak />- Notification sounds
+<LineBreak />- Security and maintenance notifications
+<LineBreak />- Settings app notifications
+<LineBreak />- Capability access notifications
+<LineBreak />- Startup app notifications
 <LineBreak />- Daylight saving time change notifications
                                                 </TextBlock>
                                             </ToolTip>
                                         </TextBlock.ToolTip>
-                                    </TextBlock>
+                        </TextBlock>
                                     <CheckBox x:Name="NotificationsCheckBox"
                                  Content="Notifications"
                                  Style="{DynamicResource CustomCheckBoxStyle}"
@@ -9477,5 +9802,3 @@ $($_.Exception.Message)" `
 finally {
     Stop-Log
 }
-
-

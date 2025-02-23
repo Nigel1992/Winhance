@@ -2666,7 +2666,7 @@ function RunAsTI($cmd, $arg) {
     0..5|% {$D += $DM."Defin`eType"("AveYo_$_",1179913,[ValueType])}; $D += [uintptr]; 4..6|% {$D += $D[$_]."MakeByR`efType"()}
     $F='kernel','advapi','advapi', ($S,$S,$I,$I,$I,$I,$I,$S,$D[7],$D[8]), ([uintptr],$S,$I,$I,$D[9]),([uintptr],$S,$I,$I,[byte[]],$I)
     0..2|% {$9=$D[0]."DefinePInvok`eMethod"(('CreateProcess','RegOpenKeyEx','RegSetValueEx')[$_],$F[$_]+'32',8214,1,$S,$F[$_+3],1,4)}
-    $DF=($P,$I,$P),($I,$I,$I,$I,$P,$D[1]),($I,$S,$S,$S,$I,$I,$I,$I,$I,$I,$I,$I,[int16],[int16],$P,$P,$P,$P),($D[3],$P),($P,$P,$I,$I)
+    $DF=($P,$I,$P),($I,$I,$I,$I,$P,$D[1]),($P,$P,$I,$I,$I,$I,$I,$I,$I,$I,$I,$I,[int16],[int16],$P,$P,$P,$P),($D[3],$P),($P,$P,$I,$I)
     1..5|% {$k=$_; $n=1; $DF[$_-1]|% {$9=$D[$k]."Defin`eField"('f' + $n++, $_, 6)}}; 0..5|% {$T += $D[$_]."Creat`eType"()}
     0..5|% {nv "A$_" ([Activator]::CreateInstance($T[$_])) -fo}; function F ($1,$2) {$T[0]."G`etMethod"($1).invoke(0,$2)}
     $TI=(whoami /groups)-like'*1-16-16384*'; $As=0; if(!$cmd) {$cmd='control';$arg='admintools'}; if ($cmd-eq'This PC'){$cmd='file:'}
@@ -8896,6 +8896,45 @@ Margin="27,0,0,0"/>
                     HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     Margin="10,0,0,0" />
+
+                            <!-- Changelog Section -->
+                            <TextBlock
+                    FontFamily="Helvetica Neue"
+                    FontSize="14"
+                    FontWeight="Bold"
+                    Foreground="{DynamicResource PrimaryTextColor}"
+                    Margin="10,20,0,10"
+                    Text="Changelog" />
+                            <ScrollViewer MaxHeight="150" Margin="10,0,10,10">
+                                <TextBlock
+                        FontFamily="Helvetica Neue"
+                        FontSize="12"
+                        Foreground="{DynamicResource PrimaryTextColor}"
+                        TextWrapping="Wrap">
+<Run Text="Version 25.02.17" FontWeight="Bold"/>
+<LineBreak/>
+[+] Added error handling for installation buttons
+<LineBreak/>
+[+] Added changelog section to About screen
+<LineBreak/>
+[+] Improved script stability across different environments
+<LineBreak/>
+[+] Added scrollable changelog view
+<LineBreak/>
+<LineBreak/>
+<Run Text="Version 25.02.16" FontWeight="Bold"/>
+<LineBreak/>
+[+] Initial release
+<LineBreak/>
+[+] Added software installation features
+<LineBreak/>
+[+] Added bloatware removal
+<LineBreak/>
+[+] Added Windows optimization options
+<LineBreak/>
+[+] Added customization features
+                                </TextBlock>
+                            </ScrollViewer>
                         </StackPanel>
                     </Grid>
                 </Border>

@@ -11,60 +11,69 @@ jobs:
       - name: Test Edge Removal
         shell: pwsh
         run: |
-          # Enable TLS 1.2
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          
           Write-Host "Starting Edge removal test..."
           
           # Check initial state
           Write-Host "`nChecking initial Edge state..."
-          $edgeExe = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-          $initialEdgeExists = Test-Path $edgeExe
-          Write-Host "Edge executable exists initially: $initialEdgeExists"
+          $edgePaths = @(
+              "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+              "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+              "${env:LOCALAPPDATA}\Microsoft\Edge\Application\msedge.exe"
+          )
           
-          $initialPackages = Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdge* | Select-Object -ExpandProperty Name
-          Write-Host "Initial Edge packages:"
-          if ($initialPackages) {
-              $initialPackages | ForEach-Object { Write-Host "  $_" }
-          } else {
-              Write-Host "  None found"
+          foreach ($path in $edgePaths) {
+              $exists = Test-Path $path
+              Write-Host "Edge exists at $path : $exists"
           }
           
+          # Stop Edge processes
+          Write-Host "`nStopping Edge processes..."
+          $processes = "MicrosoftEdgeUpdate", "msedge", "msedgewebview2"
+          foreach ($proc in $processes) {
+              Get-Process -Name $proc -ErrorAction SilentlyContinue | ForEach-Object {
+                  Write-Host "Stopping process: $($_.Name)"
+                  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+              }
+          }
+          
+          # Remove Edge using WMI
+          Write-Host "`nRemoving Edge..."
           try {
-              # Stop Edge processes
-              Write-Host "`nStopping Edge processes..."
-              $processes = "MicrosoftEdgeUpdate", "msedge", "msedgewebview2"
-              foreach ($proc in $processes) {
-                  Get-Process -Name $proc -ErrorAction SilentlyContinue | ForEach-Object {
-                      Write-Host "Stopping process: $($_.Name)"
-                      Stop-Process -Id $_.Id -Force
+              # Try to uninstall using Windows Installer
+              $installer = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Microsoft Edge*" }
+              if ($installer) {
+                  Write-Host "Found Edge installer, attempting to uninstall..."
+                  $installer.Uninstall()
+              }
+              
+              # Remove Edge folders
+              $edgeFolders = @(
+                  "C:\Program Files (x86)\Microsoft\Edge",
+                  "${env:ProgramFiles(x86)}\Microsoft\Edge",
+                  "${env:LOCALAPPDATA}\Microsoft\Edge"
+              )
+              
+              foreach ($folder in $edgeFolders) {
+                  if (Test-Path $folder) {
+                      Write-Host "Removing folder: $folder"
+                      Remove-Item -Path $folder -Recurse -Force -ErrorAction SilentlyContinue
                   }
-              }
-              
-              # Remove Edge packages
-              Write-Host "`nRemoving Edge packages..."
-              Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdge* | ForEach-Object {
-                  Write-Host "Removing package: $($_.Name)"
-                  Remove-AppxPackage -Package $_.PackageFullName -AllUsers
-              }
-              
-              Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdgeDevToolsClient* | ForEach-Object {
-                  Write-Host "Removing DevTools package: $($_.Name)"
-                  Remove-AppxPackage -Package $_.PackageFullName -AllUsers
               }
               
               # Verify removal
               Write-Host "`nVerifying Edge removal..."
-              $edgeExists = Test-Path $edgeExe
-              Write-Host "Edge executable exists: $edgeExists"
+              $edgeRemoved = $true
+              foreach ($path in $edgePaths) {
+                  if (Test-Path $path) {
+                      $edgeRemoved = $false
+                      Write-Host "Edge still exists at: $path"
+                  }
+              }
               
-              $remainingPackages = Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdge* | Select-Object -ExpandProperty Name
-              Write-Host "Remaining Edge packages:"
-              if ($remainingPackages) {
-                  $remainingPackages | ForEach-Object { Write-Host "  $_" }
-                  throw "Edge packages still exist after removal attempt"
+              if ($edgeRemoved) {
+                  Write-Host "Edge removal successful!"
               } else {
-                  Write-Host "  None found - removal successful!"
+                  throw "Edge files still exist after removal attempt"
               }
               
           } catch {

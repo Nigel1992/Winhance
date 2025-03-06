@@ -1,0 +1,47 @@
+name: Test Edge Removal
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Winhance.ps1'
+  workflow_dispatch:
+
+jobs:
+  test-edge-removal:
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set PowerShell Execution Policy
+        run: Set-ExecutionPolicy Unrestricted -Scope Process -Force
+        shell: pwsh
+      
+      - name: Check Initial Edge Status
+        run: |
+          Write-Host "Checking initial Edge installation status..."
+          $edgeProcess = Get-Process msedge -ErrorAction SilentlyContinue
+          $edgeInstalled = Test-Path "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          Write-Host "Edge Process Running: $($null -ne $edgeProcess)"
+          Write-Host "Edge Installed: $edgeInstalled"
+        shell: pwsh
+
+      - name: Run Edge Removal Script
+        run: |
+          Write-Host "Starting Edge removal..."
+          & .\Winhance.ps1
+          Write-Host "Edge removal script completed"
+        shell: pwsh
+
+      - name: Verify Edge Removal
+        run: |
+          Write-Host "Verifying Edge removal..."
+          $edgeExists = Test-Path "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          $edgePackages = Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdge* | Select-Object -ExpandProperty Name
+          if (-not $edgeExists -and -not $edgePackages) {
+              Write-Host "Edge removal verification passed!"
+          } else {
+              Write-Error "Edge removal verification failed!"
+              exit 1
+          }
+        shell: pwsh

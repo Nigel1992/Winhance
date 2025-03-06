@@ -36,14 +36,14 @@ jobs:
               }
           }
           
-          # Remove Edge using WMI
+          # Remove Edge
           Write-Host "`nRemoving Edge..."
           try {
-              # Try to uninstall using Windows Installer
-              $installer = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Microsoft Edge*" }
+              # Try to uninstall using CIM
+              $installer = Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -like "*Microsoft Edge*" }
               if ($installer) {
                   Write-Host "Found Edge installer, attempting to uninstall..."
-                  $installer.Uninstall()
+                  $installer | Invoke-CimMethod -MethodName Uninstall
               }
               
               # Remove Edge folders
@@ -58,6 +58,13 @@ jobs:
                       Write-Host "Removing folder: $folder"
                       Remove-Item -Path $folder -Recurse -Force -ErrorAction SilentlyContinue
                   }
+              }
+              
+              # Try using standard uninstaller
+              $uninstallString = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" | Where-Object { $_.DisplayName -like "*Microsoft Edge*" }).UninstallString
+              if ($uninstallString) {
+                  Write-Host "Found uninstall string: $uninstallString"
+                  Start-Process -FilePath $uninstallString -ArgumentList "--uninstall --force-uninstall" -Wait
               }
               
               # Verify removal

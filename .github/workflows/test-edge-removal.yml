@@ -11,6 +11,26 @@ jobs:
       - name: Test Edge Removal
         shell: pwsh
         run: |
-          Set-ExecutionPolicy Unrestricted -Scope Process -Force
-          Write-Host "Testing Edge removal..."
-          & .\Winhance.ps1
+          Write-Host "Starting Edge removal test..."
+          
+          # Stop Edge processes
+          $stop = "MicrosoftEdgeUpdate", "msedge", "msedgewebview2"
+          $stop | ForEach-Object { Stop-Process -Name $_ -Force -ErrorAction SilentlyContinue }
+          
+          # Remove Legacy Edge AppX package
+          Write-Host "Removing Edge packages..."
+          Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdge* | Remove-AppxPackage -AllUsers
+          Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdgeDevToolsClient* | Remove-AppxPackage -AllUsers
+          
+          # Verify removal
+          Write-Host "`nVerifying Edge removal..."
+          $edgeExists = Test-Path "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+          Write-Host "Edge executable exists: $edgeExists"
+          
+          $edgePackages = Get-AppxPackage -AllUsers *Microsoft.MicrosoftEdge* | Select-Object -ExpandProperty Name
+          if ($edgePackages) {
+              Write-Error "Edge packages still exist: $edgePackages"
+              exit 1
+          } else {
+              Write-Host "Edge removal successful!"
+          }

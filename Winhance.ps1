@@ -1864,13 +1864,6 @@ $SCRIPT:RegConfig = @{
         },
         [pscustomobject]@{
             BaseKey      = [BaseKey]::CUExplorerAdvanced
-            Name         = "JointResize"
-            Recommended  = [ValuePair]::new(0, [RegistryValueKind]::DWord)
-            DefaultValue = $null
-            Description  = "Disables Joint Resize"
-        },
-        [pscustomobject]@{
-            BaseKey      = [BaseKey]::CUExplorerAdvanced
             Name         = "MultiTaskingAltTabFilter"
             Recommended  = [ValuePair]::new(3, [RegistryValueKind]::DWord)
             DefaultValue = $null
@@ -5240,12 +5233,19 @@ function Test-RecallEnabled {
 
 # Define the Edge removal logic as a script block
 $EdgeRemovalScript = {
+    param(
+        [bool]$KeepWebView = $true  # Default to keeping WebView2 for safety
+    )
+    
     # EdgeRemoval.ps1
     # Standalone script to remove Microsoft Edge
-    # Source: Winhance (https://github.com/memstechtips/Winhance)"
+    # Source: Winhance (https://github.com/memstechtips/Winhance)
 
     # stop edge running
-    $stop = "MicrosoftEdgeUpdate", "OneDrive", "WidgetService", "Widgets", "msedge", "msedgewebview2"
+    $stop = "MicrosoftEdgeUpdate", "OneDrive", "WidgetService", "Widgets", "msedge"
+    if (-not $KeepWebView) {
+        $stop += "msedgewebview2"
+    }
     $stop | ForEach-Object { Stop-Process -Name $_ -Force -ErrorAction SilentlyContinue }
     # uninstall copilot
     Get-AppxPackage -allusers *Microsoft.Windows.Ai.Copilot.Provider* | Remove-AppxPackage
@@ -5286,14 +5286,19 @@ $EdgeRemovalScript = {
         if (Test-Path $path) { Start-Process -Wait $path -Args "/uninstall" | Out-Null }
         do { Start-Sleep 3 } while ((Get-Process -Name "setup", "MicrosoftEdge*" -ErrorAction SilentlyContinue).Path -like "*\Microsoft\Edge*")
     }
-    # remove edgewebview regedit
-    cmd /c "reg delete `"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView`" /f >nul 2>&1"
-    cmd /c "reg delete `"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView`" /f >nul 2>&1"
-    # remove folders edge edgecore edgeupdate edgewebview temp
-    Remove-Item -Recurse -Force "$env:SystemDrive\Program Files (x86)\Microsoft" -ErrorAction SilentlyContinue | Out-Null
-    # remove edge shortcuts
-    Remove-Item -Recurse -Force "$env:SystemDrive\Windows\System32\config\systemprofile\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch\Microsoft Edge.lnk" -ErrorAction SilentlyContinue | Out-Null
-    Remove-Item -Recurse -Force "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Microsoft Edge.lnk" -ErrorAction SilentlyContinue | Out-Null
+    # Only remove WebView if specifically requested
+    if (-not $KeepWebView) {
+        cmd /c "reg delete `"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView`" /f >nul 2>&1"
+        cmd /c "reg delete `"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView`" /f >nul 2>&1"
+    }
+
+    # Selective folder removal
+    if ($KeepWebView) {
+        Get-ChildItem "$env:SystemDrive\Program Files (x86)\Microsoft" -Exclude "EdgeWebView" | 
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    } else {
+        Remove-Item -Recurse -Force "$env:SystemDrive\Program Files (x86)\Microsoft" -ErrorAction SilentlyContinue
+    }
 
     $fileSystemProfiles = Get-ChildItem -Path "C:\Users" -Directory | Where-Object { 
         $_.Name -notin @('Public', 'Default', 'Default User', 'All Users') -and 
@@ -5375,44 +5380,68 @@ $EdgeRemovalScript = {
 
 # Function to remove Microsoft Edge and create removal script and scheduled task
 function Remove-Edge {
-    # Confirm with the user before proceeding
-    $result = Show-MessageBox -Message "You're about to remove Microsoft Edge from your system. This may cause system instability.`nAre you sure you want to continue?" -Title "Warning" -Buttons "YesNo" -Icon "Warning"
-
-    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-        # Execute the Edge removal logic
-        Write-Status -Message "Starting Edge Removal. Please wait..." -TargetScreen "SoftAppsScreen"
-        try {
-            & $EdgeRemovalScript
-
-            # Save the standalone script
-            $scriptPath = "$env:ProgramFiles\Winhance\Scripts\EdgeRemoval.ps1"
-            if (-not (Test-Path -Path (Split-Path -Parent $scriptPath))) {
-                New-Item -ItemType Directory -Path (Split-Path -Parent $scriptPath) -Force
-            }
-            Set-Content -Path $scriptPath -Value $EdgeRemovalScript -Force
-            Write-Status -Message "Standalone script saved at $scriptPath" -TargetScreen "SoftAppsScreen"
-
-            # Creates Scheduled Task to remove Edge if it's installed again (via Windows Update for example)
-            Register-ScheduledTask -TaskName "Winhance\EdgeRemoval" `
-                -Action (New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-File `"$scriptPath`"") `
-                -Trigger (New-ScheduledTaskTrigger -AtStartup) `
-                -User "SYSTEM" `
-                -RunLevel Highest `
-                -Settings (New-ScheduledTaskSettingsSet -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries) `
-                -Force
-            Write-Status -Message "Scheduled task created to run EdgeRemoval.ps1 at startup." -TargetScreen "SoftAppsScreen"
-
-            # Show success message box
-            Show-MessageBox -Message "Microsoft Edge has been successfully removed from your system.`n`nA startup task was created to prevent it from reinstalling.`nIf you experience issues, you can delete the 'EdgeRemoval' task in Task Scheduler." -Title "Success" -Buttons "OK" -Icon "Information"
+    # First warn about WebView2 dependencies
+    $webviewWarning = "WARNING: Many applications like Office, Teams, and other modern apps require Microsoft Edge WebView2 to function properly.`n`n" +
+                     "Do you want to:`n" +
+                     "1. Remove Edge but keep WebView2 (Recommended)`n" +
+                     "2. Remove both Edge and WebView2 (May break some apps)`n" +
+                     "3. Cancel"
+                     
+    $result = Show-MessageBox -Message $webviewWarning -Title "WebView2 Warning" -Buttons "123" -Icon "Warning"
+    
+    $keepWebView = $false
+    switch ($result) {
+        "1" {
+            $keepWebView = $true
+            Write-Status -Message "Starting Edge Removal (keeping WebView2). Please wait..." -TargetScreen "SoftAppsScreen"
         }
-        catch {
-            # Handle errors and display a failure message
-            Write-Status -Message "An error occurred during Edge removal: $($_.Exception.Message)" -TargetScreen "SoftAppsScreen"
-            Show-MessageBox -Message "An error occurred while removing Microsoft Edge. Please check the logs or try again." -Title "Error" -Buttons "OK" -Icon "Error"
+        "2" {
+            $confirmBoth = Show-MessageBox -Message "Are you absolutely sure? This may break functionality in Office, Teams, and other apps." -Title "Final Warning" -Buttons YesNo -Icon Warning
+            if ($confirmBoth -ne [System.Windows.Forms.DialogResult]::Yes) {
+                Write-Status -Message "Operation canceled by user." -TargetScreen "SoftAppsScreen"
+                return
+            }
+            Write-Status -Message "Starting Edge and WebView2 Removal. Please wait..." -TargetScreen "SoftAppsScreen"
+        }
+        "3" {
+            Write-Status -Message "Operation canceled by user." -TargetScreen "SoftAppsScreen"
+            return
         }
     }
-    else {
-        Write-Status -Message "Edge removal operation canceled by the user." -TargetScreen "SoftAppsScreen"
+
+    try {
+        & $EdgeRemovalScript -KeepWebView $keepWebView
+
+        # Save the standalone script
+        $scriptPath = "$env:ProgramFiles\Winhance\Scripts\EdgeRemoval.ps1"
+        if (-not (Test-Path -Path (Split-Path -Parent $scriptPath))) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $scriptPath) -Force
+        }
+        Set-Content -Path $scriptPath -Value $EdgeRemovalScript -Force
+        Write-Status -Message "Standalone script saved at $scriptPath" -TargetScreen "SoftAppsScreen"
+
+        # Creates Scheduled Task to remove Edge if it's installed again (via Windows Update for example)
+        Register-ScheduledTask -TaskName "Winhance\EdgeRemoval" `
+            -Action (New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-File `"$scriptPath`" -KeepWebView $true") `
+            -Trigger (New-ScheduledTaskTrigger -AtStartup) `
+            -User "SYSTEM" `
+            -RunLevel Highest `
+            -Settings (New-ScheduledTaskSettingsSet -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries) `
+            -Force
+        Write-Status -Message "Scheduled task created to run EdgeRemoval.ps1 at startup." -TargetScreen "SoftAppsScreen"
+
+        # Show success message box
+        $successMsg = if ($keepWebView) {
+            "Microsoft Edge has been successfully removed from your system (WebView2 was preserved).`n`nA startup task was created to prevent Edge from reinstalling.`nIf you experience issues, you can delete the 'EdgeRemoval' task in Task Scheduler."
+        } else {
+            "Microsoft Edge and WebView2 have been successfully removed from your system.`n`nA startup task was created to prevent Edge from reinstalling.`nIf you experience issues, you can delete the 'EdgeRemoval' task in Task Scheduler."
+        }
+        Show-MessageBox -Message $successMsg -Title "Success" -Buttons OK -Icon Information
+    }
+    catch {
+        # Handle errors and display a failure message
+        Write-Status -Message "An error occurred during Edge removal: $($_.Exception.Message)" -TargetScreen "SoftAppsScreen"
+        Show-MessageBox -Message "An error occurred while removing Microsoft Edge. Please check the logs or try again." -Title "Error" -Buttons OK -Icon Error
     }
 }
 

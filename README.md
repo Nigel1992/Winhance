@@ -82,22 +82,9 @@ This command will download and execute the **Winhance** application directly fro
 > Also, I'm not a developer, I'm just enjoying learning more about scripting/programming and learning as I go.<br><br>
 > Please also understand that I prefer to develop and work on these projects independently.<br>I do value other people's insights and appreciate any feedback, but don't take it personally if a pull request is not accepted.
 
-### Support the Project
+## 💖 Support the Project
 
-If **Winhance** has been useful to you, consider supporting the project—it truly helps!
+I build this project in my free time and don't need donations for myself. If you'd like to give something back, I'd kindly ask you to donate to a charity of your choice instead — they need it far more than I do. If you still prefer to support me directly in private, thank you so much; it's genuinely appreciated.
 
-[![Support via PayPal](https://img.shields.io/badge/Support-via%20PayPal-FFD700?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/memstech)
-
-### Feedback and Community
-
-If you have feedback, suggestions, or need help with Winhance, please join the discussion on GitHub or our Discord community:
-
-[![Join the Discussion](https://img.shields.io/badge/Join-the%20Discussion-2D9F2D?style=for-the-badge&logo=github&logoColor=white)](https://github.com/memstechtips/Winhance/discussions)
-[![Discord](https://img.shields.io/discord/1468295714961494029?color=7289da&label=Join%20Our%20Discord&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/UbPRh74PzV)
-
-### TODO:
-- Implement fix for "can't open links" due to Edge removal. 
-- Fix removal of Legacy MS Edge on Windows 10.
-- Implement jobs/background tasks for long running tasks. 
-- Implement better WinGet installation on Windows 10.
----
+[![Ko-Fi](https://img.shields.io/badge/Ko--Fi-Support%20me-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/nigel1992)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=KYV9ARF99ZSCE)
